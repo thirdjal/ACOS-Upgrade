@@ -6,6 +6,7 @@
 # v0.4: 20160721 - Added option to reboot following an upgrade
 # v0.5: 20160721 - Improved handling of connection errors
 # v0.6: 20160725 - Allow multiple devices to be included in the arguments list
+# v0.7: 20160728 - Corrected axapi_status to not crash
 #
 # Requires:
 #   - Python 2.7.x
@@ -13,7 +14,6 @@
 #   - ACOS 3.0 or higher
 #
 # TODO: add option to run multiple threads simultaniously
-#       fix the set_bootimage component when cf is present
 #       figure out how to deal w/ TLS_1.2 requirement when OpenSSL < 1.0.1 is used
 #
 
@@ -223,18 +223,20 @@ class Acos(object):
     
     def axapi_status(self, result):
         """docstring for get_axapi_status"""
-        # TODO: Remove the following line once we figure out wtf with CF cards
-        print(result)
-        if str(result) == '<Response [204]>':
-            status = 'OK'
-        else:
+        try:
             status = result.json()['response']['status']
-        
-        if status == 'fail':
-            error = '\n  ERROR: ' + result.json()['response']['err']['msg']
-            return error
-        else:
-            return status
+            if status == 'fail':
+                error = '\n  ERROR: ' + result.json()['response']['err']['msg']
+                return error
+            else:
+                return status
+        except:
+            good_status_codes = ['<Response [200]>','<Response [204]>']
+            status_code = str(result)
+            if status_code in good_status_codes:
+                return 'OK'
+            else:
+                return status_code
     
     
     def get_hostname(self):
