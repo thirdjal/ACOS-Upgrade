@@ -1,32 +1,22 @@
 #!/usr/bin/env python
 #
-# Copyright 2016, John Lawrence <jlawrence AT a10networks DOT com>, A10 Networks.
+# Copyright 2016, John Lawrence <jlawrence AT a10networks DOT com>
 #
 # v0.3: 20160720 - Display the ACOS installed versions
 # v0.4: 20160721 - Added option to reboot following an upgrade
 # v0.5: 20160721 - Improved handling of connection errors
 # v0.6: 20160725 - Allow multiple devices to be included in the arguments list
 # v0.7: 20160728 - Corrected axapi_status() to not crash
+# v0.8: 20160730 - Minor formatting and improvements
 #
 # Requires:
 #   - Python 2.7.x
 #   - aXAPI V3
 #   - ACOS 3.0 or higher
 #
-# TODO: add option to run multiple threads simultaniously
-#       figure out how to deal w/ TLS_1.2 requirement when OpenSSL < 1.0.1 is used
-#
-
-
-#
-# DEFAULT SETTINGS
-# Settings here will override the built-in defaults. Can be overridden by runtime
-# arguments supplied at the CLI.
-#
-
-default_upgrade_url = 'tftp://10.8.8.1/ACOS_non_FTA_3_2_1-SP2_4.64.upg'
-default_devices_file = 'hosts.txt'
-default_use_management = False
+# TODO: Add option to run multiple threads simultaniously
+#       Figure out how to deal w/ TLS_1.2 requirement when OpenSSL < 1.0.1
+#       Read defaults from an external file (e.g. acos_upgrade.config)
 
 
 
@@ -39,45 +29,56 @@ import requests
 
 
 
+#
+# DEFAULT SETTINGS
+# Settings here will override the built-in defaults. Can be overridden by 
+# runtime arguments supplied at the CLI.
+#
+
+default_upgrade_url = 'tftp://10.8.8.1/ACOS_non_FTA_3_2_1-SP2_4.64.upg'
+default_devices_file = 'hosts.txt'
+default_use_management = False
+
+
 
 #
 # Create and capture the command-line arguments
 #
-arguments = argparse.ArgumentParser( description='Running this script will   \
+parser = argparse.ArgumentParser( description='Running this script will   \
      upgrade the ACOS software on an A10 appliance. Contains options to      \
      overwrite the currently booted image or upgrade the standby image.')
-devices = arguments.add_mutually_exclusive_group()
+devices = parser.add_mutually_exclusive_group()
 devices.add_argument( '-f', '--file', dest='devices_file',
                         help='Simple text file containing a list of devices, \
                         one per line, to upgrade')
 devices.add_argument( 'device', nargs='*', default='',
                         help='A10 device hostname or IP address. Multiple    \
                         devices may be included seperated by a space.')
-arguments.add_argument( '-i', '--image', metavar="URL",
+parser.add_argument( '-i', '--image', metavar="URL",
                         help='Remote file path for upgrade image.  Format:   \
                         (tftp|ftp|scp|sftp)://[user[:password]@]host[:port]/file')
-arguments.add_argument( '-m', '--use-mgmt', dest='use_mgmt', action='store_const',\
+parser.add_argument( '-m', '--use-mgmt', dest='use_mgmt', action='store_const',\
                         const=1, default=0,
                         help='Attempt the upgrade via built-in management interface')
-arguments.add_argument( '--overwrite', action='store_true',
+parser.add_argument( '--overwrite', action='store_true',
                         help='Overwrite the currently booted image. Default\
                         action will upgrade the non-booted image version')
-arguments.add_argument( '-p', '--password',
+parser.add_argument( '-p', '--password',
                         help='ACOS Administrator password' )
-arguments.add_argument( '--reboot', action='store_const', const=1, default=0,
+parser.add_argument( '--reboot', action='store_const', const=1, default=0,
                         help='Instruct the A10 appliance to reboot following the \
                         image upgrade (also executes a "write memory" command)')
-arguments.add_argument( '-s', '--set-bootimage', dest='set_bootimage',\
+parser.add_argument( '-s', '--set-bootimage', dest='set_bootimage',\
                         action='store_true',
                         help='Set ACOS to use the new image on next boot')
-arguments.add_argument( '-u', '--username', default='admin',
+parser.add_argument( '-u', '--username', default='admin',
                         help='ACOS Administrator username (default: admin)' )
-arguments.add_argument( "-v", "--verbose", action='count',
+parser.add_argument( "-v", "--verbose", action='count',
                         help="Enable verbose detail")
-arguments.add_argument( "-w", "--write", action='store_true',
+parser.add_argument( "-w", "--write", action='store_true',
                         help="Save the configuration to non-volitile memory")
 try:
-    args = arguments.parse_args()
+    args = parser.parse_args()
     devices = args.device
     devices_file = args.devices_file
     overwrite_bootimage = args.overwrite
@@ -139,9 +140,13 @@ def read_devices_file(the_file):
         plural = ''
         with open(the_file) as f:
             for device in f.readlines():
+                if device.startswith('#') or device.rstrip() == '':
+                    # Skip comments and blank lines
+                    continue
                 devices.append(device.rstrip())
                 number_of_devices = len(devices)
-                if number_of_devices != 1: plural='es'
+            if number_of_devices != 1:
+                plural='es'
             print ('  INFO: Found %d device address%s.'
                   %(number_of_devices, plural))
             return devices
@@ -392,4 +397,12 @@ if not password:
 
 
 if __name__ == '__main__':
-    main()
+    finished = False
+    while not finished:
+        try:
+            print('Starting ACOS Upgrade')
+            main()
+
+        except KeyboardInterrupt:
+            print('Exiting')
+            finished = True

@@ -1,2 +1,4 @@
-10.8.8.130
-10.8.8.131
+# A list of hostnames or IP addresses upgrade
+# using the acos_upgrade.py script.
+
+10.8.8.139
