@@ -6,7 +6,7 @@
 # v0.4: 20160721 - Added option to reboot following an upgrade
 # v0.5: 20160721 - Improved handling of connection errors
 # v0.6: 20160725 - Allow multiple devices to be included in the arguments list
-# v0.7: 20160728 - Corrected axapi_status to not crash
+# v0.7: 20160728 - Corrected axapi_status() to not crash
 #
 # Requires:
 #   - Python 2.7.x
@@ -25,8 +25,8 @@
 #
 
 default_upgrade_url = 'tftp://10.8.8.1/ACOS_non_FTA_3_2_1-SP2_4.64.upg'
-default_devices_file = 'hosts.txt'     # Local file to look for IP Addresses/Hostnames
-default_use_management = True          # set to True to always use management interface
+default_devices_file = 'hosts.txt'
+default_use_management = False
 
 
 
@@ -142,7 +142,8 @@ def read_devices_file(the_file):
                 devices.append(device.rstrip())
                 number_of_devices = len(devices)
                 if number_of_devices != 1: plural='es'
-            print ('  INFO: Found %d device address%s.' %(number_of_devices, plural))
+            print ('  INFO: Found %d device address%s.'
+                  %(number_of_devices, plural))
             return devices
     except:
         print('\n  ERROR: Unable to read %s.' %the_file)
@@ -159,7 +160,8 @@ def get_url_components(url):
     sliced_url = remainder.split('/',1)
     server = sliced_url[0]
     path_and_file = sliced_url[1]
-    upgrade_file = path_and_file[path_and_file.rfind('/', 0, len(path_and_file))+1:len(path_and_file)]
+    upgrade_file = path_and_file[
+        path_and_file.rfind('/', 0, len(path_and_file)) + 1:len(path_and_file)]
     server_has_credentials = server.find('@',0,len(server))
     if server_has_credentials > 0:
         server_sliced = server.split('@',1)
@@ -214,7 +216,7 @@ class Acos(object):
         if method == 'GET':
             r = requests.get(url, headers=self.headers, verify=False)
         elif method == 'POST':
-            r = requests.post(url, data=json.dumps(payload),                 \
+            r = requests.post(url, data=json.dumps(payload),
                              headers=self.headers, verify=False)
         if verbose:
             print(r.content)
@@ -266,7 +268,8 @@ class Acos(object):
         except:
             print('\n  ERROR: Cannot determine boot location!')
             return 'FAIL'
-        print("   %s: Booted from the %s image" %(self.hostname, self.current_image) )
+        print("   %s: Booted from the %s image" 
+             %(self.hostname, self.current_image) )
         return self.current_image
     
     
@@ -285,15 +288,15 @@ class Acos(object):
             print('\n  ERROR: Invalid upgrade location')
         
         short_upgrade_location = upgrade_location[:3]
-        print("   %s: Upgrading %s image using %s" % (                       \
-            self.hostname,                                                   \
-            upgrade_location,                                                \
+        print("   %s: Upgrading %s image using %s" 
+            %(self.hostname,
+            upgrade_location,
             upgrade['protocol'] ))
         print('      This may take some time...')
         module = 'upgrade/hd'
         method = 'POST'
-        payload = { "hd": { "image": short_upgrade_location,                 \
-                            "use-mgmt-port": upgrade_use_mgmt,               \
+        payload = { "hd": { "image": short_upgrade_location,
+                            "use-mgmt-port": upgrade_use_mgmt,
                             "file-url": upgrade['uri'] } }
         r = self.axapi_call(module, method, payload)
         print('      %s' %self.axapi_status(r) )
@@ -301,7 +304,8 @@ class Acos(object):
         
         
         if set_bootimage:
-            print("   %s Updating bootimage to %s..." %(self.hostname, upgrade_location))
+            print("   %s Updating bootimage to %s..." 
+                %(self.hostname, upgrade_location))
             module = 'bootimage'
             method = 'POST'
             payload = {"bootimage": {"hd-cfg": {"hd": 1, short_upgrade_location: 1}}}
@@ -342,7 +346,8 @@ class Acos(object):
     
     def reboot(self):
         """docstring for reboot"""
-        print("   %s: Rebooting. The appliance will be unavailable for up to 5 minutes..." %self.hostname)
+        print("   %s: Rebooting. The appliance will be unavailable for up to 5 minutes..." 
+            %self.hostname)
         module = 'reboot'
         method = 'POST'
         payload = {'reboot': {'reason': 'ACOS upgrade'}}
@@ -378,7 +383,7 @@ if default_use_management:
     print( '  INFO: Using administratively specified override "use-mgmt-port"')
     upgrade_use_mgmt = 1
 if not device_list:
-    print( '  INFO: No devices provided, looking for default device file: %s'\
+    print( '  INFO: No devices provided, looking for default device file: %s'
              %default_devices_file )
     device_list = read_devices_file(default_devices_file)
 if not password:
