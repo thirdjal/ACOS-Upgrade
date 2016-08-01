@@ -1,4 +1,4 @@
 # A list of hostnames or IP addresses upgrade
 # using the acos_upgrade.py script.
 
-10.8.8.139
+10.8.8.129

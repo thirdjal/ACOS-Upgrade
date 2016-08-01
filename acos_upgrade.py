@@ -402,6 +402,7 @@ if __name__ == '__main__':
         try:
             print('Starting ACOS Upgrade')
             main()
+            finished = True
 
         except KeyboardInterrupt:
             print('Exiting')
