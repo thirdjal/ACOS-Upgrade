@@ -8,6 +8,7 @@
 # v0.6: 20160725 - Allow multiple devices to be included in the arguments list
 # v0.7: 20160728 - Corrected axapi_status() to not crash
 # v0.8: 20160730 - Minor formatting and improvements
+# v0.9: 20160802 - Handle reboot module in ACOS 3.2
 #
 # Requires:
 #   - Python 2.7.x
@@ -35,7 +36,7 @@ import requests
 # runtime arguments supplied at the CLI.
 #
 
-default_upgrade_url = 'tftp://10.8.8.1/ACOS_non_FTA_3_2_1-SP2_4.64.upg'
+default_upgrade_url = 'tftp://10.8.8.1/ACOS_non_FTA_3_2_1-SP2_5.64.upg'
 default_devices_file = 'hosts.txt'
 default_use_management = False
 
@@ -44,35 +45,35 @@ default_use_management = False
 #
 # Create and capture the command-line arguments
 #
-parser = argparse.ArgumentParser( description='Running this script will   \
-     upgrade the ACOS software on an A10 appliance. Contains options to      \
+parser = argparse.ArgumentParser( description='Running this script will        \
+     upgrade the ACOS software on an A10 appliance. Contains options to        \
      overwrite the currently booted image or upgrade the standby image.')
 devices = parser.add_mutually_exclusive_group()
 devices.add_argument( '-f', '--file', dest='devices_file',
-                        help='Simple text file containing a list of devices, \
+                        help='Simple text file containing a list of devices,   \
                         one per line, to upgrade')
 devices.add_argument( 'device', nargs='*', default='',
-                        help='A10 device hostname or IP address. Multiple    \
+                        help='A10 device hostname or IP address. Multiple      \
                         devices may be included seperated by a space.')
 parser.add_argument( '-i', '--image', metavar="URL",
-                        help='Remote file path for upgrade image.  Format:   \
+                        help='Remote file path for upgrade image.  Format:     \
                         (tftp|ftp|scp|sftp)://[user[:password]@]host[:port]/file')
 parser.add_argument( '-m', '--use-mgmt', dest='use_mgmt', action='store_const',\
                         const=1, default=0,
                         help='Attempt the upgrade via built-in management interface')
 parser.add_argument( '--overwrite', action='store_true',
-                        help='Overwrite the currently booted image. Default\
+                        help='Overwrite the currently booted image. Default    \
                         action will upgrade the non-booted image version')
 parser.add_argument( '-p', '--password',
                         help='ACOS Administrator password' )
 parser.add_argument( '--reboot', action='store_const', const=1, default=0,
-                        help='Instruct the A10 appliance to reboot following the \
+                        help='Instruct the A10 appliance to reboot following the\
                         image upgrade (also executes a "write memory" command)')
-parser.add_argument( '-s', '--set-bootimage', dest='set_bootimage',\
+parser.add_argument( '-s', '--set-bootimage', dest='set_bootimage',
                         action='store_true',
                         help='Set ACOS to use the new image on next boot')
 parser.add_argument( '-u', '--username', default='admin',
-                        help='ACOS Administrator username (default: admin)' )
+                        help='ACOS Administrator username (default: admin)')
 parser.add_argument( "-v", "--verbose", action='count',
                         help="Enable verbose detail")
 parser.add_argument( "-w", "--write", action='store_true',
@@ -218,11 +219,13 @@ class Acos(object):
     def axapi_call(self, module, method='GET', payload=''):
         """docstring for axapi"""
         url = self.base_url + module
-        if method == 'GET':
-            r = requests.get(url, headers=self.headers, verify=False)
-        elif method == 'POST':
+        if method == 'POST' and payload:
             r = requests.post(url, data=json.dumps(payload),
                              headers=self.headers, verify=False)
+        elif method == 'POST':
+            r = requests.post(url, headers=self.headers, verify=False)
+        elif method == 'GET':
+            r = requests.get(url, headers=self.headers, verify=False)
         if verbose:
             print(r.content)
         return r
@@ -355,8 +358,8 @@ class Acos(object):
             %self.hostname)
         module = 'reboot'
         method = 'POST'
-        payload = {'reboot': {'reason': 'ACOS upgrade'}}
-        r = self.axapi_call(module, method, payload)
+        #payload = {'reboot': {'reason': 'ACOS upgrade'}}
+        r = self.axapi_call(module, method)
         print('      %s' %self.axapi_status(r) )
     
     
