@@ -36,6 +36,8 @@ devices_file = 'hosts.txt'
 upgrade_url = 'tftp://10.8.8.1/ACOS_non_FTA_3_2_1-SP2_5.64.upg'
 username = 'admin'
 use_mgmt = False
+password = None
+verbose = 0
 
 
 #
@@ -60,7 +62,7 @@ parser.add_argument('-m', '--use-mgmt', dest='use_mgmt', action='store_true',
 parser.add_argument('--overwrite', action='store_true',
                     help='Overwrite the currently booted image. Default       \
                     action will upgrade the non-booted image version')
-parser.add_argument('-p', '--password',
+parser.add_argument('-p', '--password', default=password,
                     help='ACOS Administrator password')
 parser.add_argument('--reboot', action='store_const', const=1, default=0,
                     help='Instruct the A10 appliance to reboot following the  \
@@ -69,8 +71,9 @@ parser.add_argument('-s', '--set-bootimage', dest='set_bootimage',
                     action='store_true',
                     help='Set ACOS to use the new image on next boot')
 parser.add_argument('-u', '--username', default=username,
-                    help='ACOS Administrator username (default: %s)' % username)
-parser.add_argument("-v", "--verbose", action='count',
+                    help='ACOS Administrator username (default: {})'
+                    .format(username))
+parser.add_argument("-v", "--verbose", action='count', default=verbose,
                     help="Enable verbose detail")
 parser.add_argument("-w", "--write", action='store_true',
                     help="Save the configuration to non-volatile memory")
@@ -132,7 +135,7 @@ def main():
 
 def read_devices_file(the_file):
     """docstring for read_devices_file"""
-    print('  INFO: Looking for device addresses in %s' % the_file)
+    print('  INFO: Looking for device addresses in {}'.format(the_file))
     try:
         devices_in_file = []
         number_of_devices = 0
@@ -146,8 +149,8 @@ def read_devices_file(the_file):
                 number_of_devices = len(devices_in_file)
             if number_of_devices != 1:
                 plural = 'es'
-            print('  INFO: Found %d device address%s.'
-                  % (number_of_devices, plural))
+            print('  INFO: Found {} device address{}.'
+                  .format(number_of_devices, plural))
             return devices_in_file
     except Exception as e:
         print('\n  ERROR: {}'.format(e))
@@ -171,16 +174,34 @@ def get_url_components(url):
         server_authentication = server_sliced[0]
         server_address = server_sliced[1]
     else:
-        server_authentication = ''
+        server_authentication = None
         server_address = server
     
-    components = {'protocol': upgrade_protocol.upper(),
+    url_components = {'protocol': upgrade_protocol.upper(),
                   'authentication': server_authentication,
                   'address': server_address,
                   'path': path_and_file,
                   'filename': upgrade_file,
                   'uri': url}
-    return components
+    return url_components
+
+
+def axapi_status(result):
+    """docstring for get_axapi_status"""
+    if result.status_code == requests.codes.ok:
+        status = 'OK'
+        return status
+    elif 'response' in result.json():
+        status = result.json()['response']['status']
+        if status == 'fail':
+            error_msg = '\n  ERROR: {}'.format(
+                result.json()['response']['err']['msg'])
+            return error_msg
+        else:
+            return status
+    else:
+        status = result.status_code
+        return status
 
 
 class Acos(object):
@@ -188,22 +209,22 @@ class Acos(object):
     def __init__(self, address):
         self.device = address
         self.base_url = 'https://' + address + '/axapi/v3/'
-        self.current_image = ''
+        self.current_image = None
         self.headers = {'content-type': 'application/json'}
-        self.token = ''
-        self.hostname = ''
+        self.token = None
+        self.hostname = None
         self.versions = {}
     
     def authenticate(self, user, passwd):
         """docstring for authenticate"""
-        print('\nLogging onto %s...' % self.device)
+        print('\nLogging onto {}...'.format(self.device))
         module = 'auth'
         method = 'POST'
         payload = {"credentials": {"username": user, "password": passwd}}
         try:
             r = self.axapi_call(module, method, payload)
         except Exception as e:
-            print('  ERROR: Unable to connect to %s - %s' % (self.device, e))
+            print('  ERROR: Unable to connect to {} - {}'.format(self.device, e))
             return 'FAIL'
         try:
             token = r.json()['authresponse']['signature']
@@ -226,32 +247,12 @@ class Acos(object):
             print(r.content)
         return r
 
-    @staticmethod
-    def axapi_status(result):
-        """docstring for get_axapi_status"""
-        status = ''
-        if result.status_code == requests.codes.ok:
-            status = 'OK'
-            return status
-        elif 'response' in result.json():
-            status = result.json()['response']['status']
-            if status == 'fail':
-                error_msg = '\n  ERROR: {}'.format(
-                    result.json()['response']['err']['msg']
-                )
-                return error_msg
-            else:
-                return status
-        else:
-            status = result.status_code
-            return status
-
     def get_hostname(self):
         """docstring for get_hostname"""
         module = 'hostname'
         r = self.axapi_call(module)
         hostname = r.json()['hostname']['value']
-        print("   %s: Logged on successfully" % hostname)
+        print("   {}: Logged on successfully".format(hostname))
         self.hostname = hostname
     
     def show_version(self):
@@ -271,8 +272,8 @@ class Acos(object):
         except Exception as e:
             print('\n  ERROR: {}'.format(e))
             return 'FAIL'
-        print("   %s: Booted from the %s image" 
-              % (self.hostname, self.current_image))
+        print("   {}: Booted from the {} image" 
+              .format(self.hostname, self.current_image))
         return self.current_image
     
     def upgrade_image(self, upgrade, image_location='standby'):
@@ -292,10 +293,8 @@ class Acos(object):
             return 'FAIL'
         
         short_upgrade_location = upgrade_location[:3]
-        print("   %s: Upgrading %s image using %s" 
-              % (self.hostname,
-                 upgrade_location,
-                 upgrade['protocol']))
+        print("   {}: Upgrading {} image using {}" 
+              .format(self.hostname, upgrade_location, upgrade['protocol']))
         print('      This may take some time...')
         module = 'upgrade/hd'
         method = 'POST'
@@ -303,24 +302,24 @@ class Acos(object):
                           "use-mgmt-port": int(use_mgmt),
                           "file-url": upgrade['uri']}}
         r = self.axapi_call(module, method, payload)
-        print('      %s' % self.axapi_status(r))
+        print('      {}'.format(axapi_status(r)))
 
         if set_bootimage:
-            print("   %s Updating bootimage to %s..." 
-                  % (self.hostname, upgrade_location))
+            print("   {} Updating bootimage to {}..." 
+                  .format(self.hostname, upgrade_location))
             module = 'bootimage'
             method = 'POST'
             payload = {"bootimage": {"hd-cfg": {"hd": 1, short_upgrade_location: 1}}}
             r = self.axapi_call(module, method, payload)
-            print('      %s' % self.axapi_status(r))
+            print('      {}'.format(axapi_status(r)))
 
     def write_memory(self):
         """docstring for write_memory"""
-        print("   %s: Saving configuration" % self.hostname)
+        print("   {}: Saving configuration".format(self.hostname))
         module = 'write/memory'
         method = 'POST'
         r = self.axapi_call(module, method)
-        print('      %s' % self.axapi_status(r))
+        print('      {}'.format(axapi_status(r)))
 
     def show_bootimage(self):
         """docstring for show_bootimage"""
@@ -335,30 +334,30 @@ class Acos(object):
         elif bootimage['hd-default'] == 'hd-sec':
             sec_star = star
         print('')
-        print('      %s: ACOS Versions' % self.hostname)
+        print('      {}: ACOS Versions'.format(self.hostname))
         print('      --------------------------------------------')
-        print('      HD Primary:   %s %s' % (bootimage['hd-pri'], pri_star))
-        print('      HD Secondary: %s %s' % (bootimage['hd-sec'], sec_star))
+        print('      HD Primary:   {} {}'.format(bootimage['hd-pri'], pri_star))
+        print('      HD Secondary: {} {}'.format(bootimage['hd-sec'], sec_star))
         print('      --------------------------------------------')
         print('')
         pass
 
     def reboot(self):
         """docstring for reboot"""
-        print("   %s: Rebooting. The appliance will be unavailable for up to 5\
-              minutes..." % self.hostname)
+        print("   {}: Rebooting. The appliance will be unavailable for up to 5\
+              minutes...".format(self.hostname))
         module = 'reboot'
         method = 'POST'
         r = self.axapi_call(module, method)
-        print('      %s' % self.axapi_status(r))
+        print('      {}'.format(axapi_status(r)))
 
     def logoff(self):
         """docstring for logoff"""
-        print("   %s: Logging off..." % self.hostname)
+        print("   {}: Logging off...".format(self.hostname))
         module = 'logoff'
         method = 'POST'
         r = self.axapi_call(module, method)
-        print('      %s' % self.axapi_status(r))
+        print('      {}'.format(axapi_status(r)))
 
 
 if __name__ == '__main__':
@@ -368,7 +367,7 @@ if __name__ == '__main__':
     print('')
     device_list = []
     if devices_file:
-        print('  INFO: Looking for device file: %s' % devices_file)
+        print('  INFO: Looking for device file: {}'.format(devices_file))
         device_list = read_devices_file(devices_file)
     elif devices:
         device_list = devices
@@ -377,7 +376,7 @@ if __name__ == '__main__':
     if use_mgmt:
         print('  INFO: Will attempt upgrade via interface management')
     if not password:
-        password = getpass.getpass('\nEnter password for %s: ' % username)
+        password = getpass.getpass('\nEnter password for {}: '.format(username))
     print('  INFO: Upgrading from {}'.format(upgrade_url))
     
     finished = False
