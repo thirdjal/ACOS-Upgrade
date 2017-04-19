@@ -1,0 +1,6 @@
+# A list of hostnames or IP addresses to perform the upgrade on
+# using the acos_upgrade.py script. 
+# Enter each device on a new line. Commented lines will be ignored.
+
+ 10.1.2.3
+ 10.2.3.4
